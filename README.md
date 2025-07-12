@@ -1,249 +1,90 @@
-#!/bin/bash
+# Music Database ETL Pipeline with SQLite and Shell Script
 
-# ==============================================================================
-# Music Database ETL Script
-#
-# Description:
-# This script automates the ETL (Extract, Transform, Load) process for the
-# music database project. It performs the following steps:
-# 1.  Defines the database file and raw data locations.
-# 2.  Drops old tables to ensure a fresh start.
-# 3.  Creates the final, normalized tables (Genres, Artists, Albums, Tracks).
-# 4.  Creates temporary staging tables for raw data.
-# 5.  (EXTRACT) Imports data from CSV files into the temporary tables.
-# 6.  (TRANSFORM) Cleans the data in the temporary tables by:
-#     - Removing duplicate entries.
-#     - Deleting rows with critical null values.
-# 7.  (LOAD) Transfers the clean data from temporary tables into the final tables.
-# 8.  Cleans up by dropping the temporary tables.
-#
-# Usage:
-# Run this script from your terminal: ./etl_script.sh
-#
-# ==============================================================================
+This project demonstrates a complete Extract, Transform, and Load (ETL) pipeline designed to build a clean, normalized, and query-ready music database from raw, inconsistent CSV files. The entire workflow is automated using a single shell script that orchestrates data operations within SQLite.
 
-# --- Configuration ---
-DB_FILE="music.db"
-RAW_DATA_DIR="raw_data"
+## Project Summary
 
-# --- Start of ETL Process ---
-echo "Starting the Music Database ETL process..."
+The core challenge addressed by this project is the common issue of dealing with messy, real-world data. The initial music data was spread across multiple files and suffered from inconsistencies such as duplicate records, null values, and incorrect formatting, making it unsuitable for reliable analysis.
 
-# Execute all SQL commands within a single sqlite3 session
-sqlite3 ${DB_FILE} <<'END_SQL'
+This solution implements a robust ETL pipeline that:
+1.  **Extracts** data from raw CSV files.
+2.  **Transforms** the data by cleaning and validating it in a temporary staging area.
+3.  **Loads** the clean, structured data into a final, permanent relational database.
 
--- Turn on foreign key support
-PRAGMA foreign_keys = ON;
+## Key Features
 
--- ==============================================================================
--- STEP 1: DROP EXISTING TABLES (for a clean, repeatable run)
--- ==============================================================================
-echo "Dropping old tables if they exist..."
-DROP TABLE IF EXISTS Tracks;
-DROP TABLE IF EXISTS Albums;
-DROP TABLE IF EXISTS Artists;
-DROP TABLE IF EXISTS Genres;
-DROP TABLE IF EXISTS Media; -- As mentioned in presentation
+- **Automated Pipeline**: A single, executable shell script (`etl_script.sh`) manages the entire process from start to finish.
+- **Staging Area for Data Integrity**: Uses temporary tables as a staging area to clean and validate data without compromising the integrity of the final tables.
+- **Data Cleaning**: Implements SQL-based cleaning logic to handle duplicates, remove records with null values, and ensure relational consistency.
+- **Normalized Database Schema**: The final database is structured with a clean, relational design, making it efficient for complex queries.
 
--- ==============================================================================
--- STEP 2: CREATE FINAL, NORMALIZED TABLES
--- ==============================================================================
-echo "Creating final, normalized tables..."
+## Technology Stack
 
-CREATE TABLE Genres (
-    GenreID INTEGER PRIMARY KEY AUTOINCREMENT,
-    Name TEXT NOT NULL UNIQUE
-);
+- **Database**: **SQLite** (for its lightweight, serverless, and file-based architecture)
+- **Scripting**: **Shell Scripting (Bash)** (for automating command-line operations)
+- **Execution Environment**: **Git Bash** (or any Unix-like terminal)
+- **Core Tool**: **`sqlite3` Command-Line Interface (CLI)**
 
-CREATE TABLE Artists (
-    ArtistID INTEGER PRIMARY KEY AUTOINCREMENT,
-    Name TEXT NOT NULL,
-    BirthDate TEXT,
-    GenreID INTEGER,
-    FOREIGN KEY (GenreID) REFERENCES Genres(GenreID)
-);
+## Database Schema
 
-CREATE TABLE Albums (
-    AlbumID INTEGER PRIMARY KEY AUTOINCREMENT,
-    Title TEXT NOT NULL,
-    ReleaseDate TEXT,
-    ArtistID INTEGER NOT NULL,
-    FOREIGN KEY (ArtistID) REFERENCES Artists(ArtistID)
-);
+The database is designed with four main tables that are linked through foreign key relationships to create a normalized structure.
 
-CREATE TABLE Tracks (
-    TrackID INTEGER PRIMARY KEY AUTOINCREMENT,
-    Title TEXT NOT NULL,
-    Duration INTEGER, -- Assuming duration is in seconds
-    AlbumID INTEGER NOT NULL,
-    FOREIGN KEY (AlbumID) REFERENCES Albums(AlbumID)
-);
+### Entity-Relationship Diagram (ERD)
 
--- Example of creating the new Media table mentioned in the presentation
-CREATE TABLE Media (
-    MediaID INTEGER PRIMARY KEY AUTOINCREMENT,
-    Format TEXT NOT NULL, -- e.g., 'MP3', 'WAV'
-    TrackID INTEGER NOT NULL,
-    FOREIGN KEY (TrackID) REFERENCES Tracks(TrackID)
-);
+![ERD of the Music Database Schema](https://i.imgur.com/6a1BqH0.png)
+*A visual representation of the final database schema.*
 
+- **`Genres`**: Stores unique music genre information.
+- **`Artists`**: Contains details for each artist and links to a specific genre.
+- **`Albums`**: Stores album information and links to the corresponding artist.
+- **`Tracks`**: Contains individual track details and links to a specific album.
 
--- ==============================================================================
--- STEP 3: CREATE TEMPORARY STAGING TABLES
--- ==============================================================================
-echo "Creating temporary staging tables..."
-DROP TABLE IF EXISTS temp_Artists;
-DROP TABLE IF EXISTS temp_Albums;
-DROP TABLE IF EXISTS temp_Tracks;
-DROP TABLE IF EXISTS temp_Genres;
+## The ETL Workflow
 
-CREATE TABLE temp_Genres (
-    Name TEXT
-);
+The `etl_script.sh` script executes the following sequence of operations:
 
-CREATE TABLE temp_Artists (
-    Name TEXT,
-    BirthDate TEXT,
-    GenreName TEXT -- Storing genre by name initially
-);
+1.  **Clear Previous Data**: Deletes all data from the final tables to ensure a fresh load every time the script is run.
+2.  **Extract**: Imports data from the raw CSV files located in the `raw_data/` directory into temporary staging tables (`Artists_Temp`, `Albums_Temp`, etc.).
+3.  **Transform**: Executes a series of SQL commands to clean and structure the data in the staging area. This includes:
+    - **Validating Foreign Keys**: Removing records with invalid foreign keys (e.g., a track pointing to a non-existent album).
+    - **Handling Nulls**: Deleting rows with missing critical data like names or titles.
+    - **Removing Duplicates**: Using `GROUP BY` clauses to eliminate duplicate entries.
+    - **Data Formatting**: Trimming whitespace and converting data types where necessary (e.g., converting track duration from minutes to seconds).
+4.  **Load**: Inserts the clean data from the temporary tables (`Artists_Cleaned`, `Albums_Cleaned`, etc.) into the final, permanent tables.
+5.  **Cleanup**: Drops all temporary tables from the database to leave behind a clean final product.
 
-CREATE TABLE temp_Albums (
-    Title TEXT,
-    ReleaseDate TEXT,
-    ArtistName TEXT -- Storing artist by name initially
-);
+## How to Run the Project
 
-CREATE TABLE temp_Tracks (
-    Title TEXT,
-    Duration INTEGER,
-    AlbumTitle TEXT -- Storing album by title initially
-);
+### Prerequisites
 
-.print "\n--- ETL Process Steps ---"
-.print "Step 1 & 2: (EXTRACT/LOAD) Importing data from CSV to temporary tables..."
--- ==============================================================================
--- STEP 4: (EXTRACT) IMPORT DATA FROM CSV FILES INTO TEMP TABLES
--- Note: The .import command must be run outside the HERE document.
--- This part of the script handles that after the SQL block.
--- ==============================================================================
+- You must have **SQLite3** installed and accessible from your command line.
+- A **Bash-compatible terminal** is required (e.g., Git Bash on Windows, or any standard terminal on macOS/Linux).
 
--- ==============================================================================
--- STEP 5: (TRANSFORM & LOAD) CLEAN AND TRANSFER DATA
--- ==============================================================================
-.print "Step 3: (TRANSFORM) Cleaning and validating data..."
+### Instructions
 
--- Populate Genres from unique, non-null genre names in temp_Artists
-INSERT INTO Genres (Name)
-SELECT DISTINCT GenreName FROM temp_Artists WHERE GenreName IS NOT NULL AND GenreName != '';
+1.  **Clone the Repository**:
+    ```bash
+    git clone <your-repository-url>
+    cd <your-repository-directory>
+    ```
 
--- Populate Artists
--- We use a subquery to look up the GenreID from the Genres table
-INSERT INTO Artists (Name, BirthDate, GenreID)
-SELECT
-    t.Name,
-    t.BirthDate,
-    (SELECT GenreID FROM Genres WHERE Name = t.GenreName)
-FROM temp_Artists t
-WHERE t.Name IS NOT NULL AND t.Name != '';
+2.  **Set up the Directory Structure**: Ensure your project directory is organized as follows:
+    ```
+    .
+    ├── database/
+    │   └── iMediaMusicDB.sqlite  # Your SQLite database file
+    ├── raw_data/
+    │   ├── Artists_Raw.csv
+    │   ├── Albums_Raw.csv
+    │   ├── Tracks_Raw.csv
+    │   └── Genres_Raw.csv
+    └── etl_script.sh
+    ```
 
--- Populate Albums
--- We use a subquery to look up the ArtistID from the Artists table
-INSERT INTO Albums (Title, ReleaseDate, ArtistID)
-SELECT
-    t.Title,
-    t.ReleaseDate,
-    (SELECT ArtistID FROM Artists WHERE Name = t.ArtistName)
-FROM temp_Albums t
-WHERE t.Title IS NOT NULL AND t.Title != ''
-  AND t.ArtistName IS NOT NULL AND t.ArtistName != '';
+3.  **Execute the ETL Script**: Run the following command in your terminal from the project's root directory.
+    ```bash
+    ./etl_script.sh
+    ```
+    You will see log messages in the terminal, and upon successful execution, the script will print: `ETL script completed successfully`. Your `iMediaMusicDB.sqlite` database will now be populated with clean data.
 
--- Populate Tracks
--- We use a subquery to look up the AlbumID from the Albums table
-INSERT INTO Tracks (Title, Duration, AlbumID)
-SELECT
-    t.Title,
-    t.Duration,
-    (SELECT AlbumID FROM Albums WHERE Title = t.AlbumTitle)
-FROM temp_Tracks t
-WHERE t.Title IS NOT NULL AND t.Title != ''
-  AND t.AlbumTitle IS NOT NULL AND t.AlbumTitle != '';
-
-.print "Step 4: (LOAD) Data has been loaded into final tables."
-
--- ==============================================================================
--- STEP 6: CLEANUP
--- ==============================================================================
-.print "Cleaning up temporary tables..."
-DROP TABLE temp_Genres;
-DROP TABLE temp_Artists;
-DROP TABLE temp_Albums;
-DROP TABLE temp_Tracks;
-
-.print "\nETL process completed successfully."
-
-END_SQL
-
-# --- .import commands need to be run separately ---
-# The sqlite3 CLI's .import command doesn't work inside a multi-line SQL block
-# passed via a HERE document. We run them here.
-
-echo "Importing raw_data/genres.csv into temp_Genres..."
-sqlite3 ${DB_FILE} ".mode csv" ".import ${RAW_DATA_DIR}/genres.csv temp_Genres"
-
-echo "Importing raw_data/artists.csv into temp_Artists..."
-sqlite3 ${DB_FILE} ".mode csv" ".import ${RAW_DATA_DIR}/artists.csv temp_Artists"
-
-echo "Importing raw_data/albums.csv into temp_Albums..."
-sqlite3 ${DB_FILE} ".mode csv" ".import ${RAW_DATA_DIR}/albums.csv temp_Albums"
-
-echo "Importing raw_data/tracks.csv into temp_Tracks..."
-sqlite3 ${DB_FILE} ".mode csv" ".import ${RAW_DATA_DIR}/tracks.csv temp_Tracks"
-
-
-echo "Finalizing data transfer..."
-# Re-run the INSERT statements now that the temp tables are populated
-sqlite3 ${DB_FILE} <<'FINAL_LOAD'
-PRAGMA foreign_keys = ON;
-
--- Populate Genres from unique, non-null genre names
-INSERT OR IGNORE INTO Genres (Name)
-SELECT DISTINCT Name FROM temp_Genres WHERE Name IS NOT NULL AND Name != '';
-
--- Populate Artists
-INSERT OR IGNORE INTO Artists (Name, BirthDate, GenreID)
-SELECT
-    t.Name,
-    t.BirthDate,
-    (SELECT GenreID FROM Genres WHERE Name = t.GenreName)
-FROM temp_Artists t
-WHERE t.Name IS NOT NULL AND t.Name != '';
-
--- Populate Albums
-INSERT OR IGNORE INTO Albums (Title, ReleaseDate, ArtistID)
-SELECT
-    t.Title,
-    t.ReleaseDate,
-    (SELECT ArtistID FROM Artists WHERE Name = t.ArtistName)
-FROM temp_Albums t
-WHERE t.Title IS NOT NULL AND t.Title != '';
-
--- Populate Tracks
-INSERT OR IGNORE INTO Tracks (Title, Duration, AlbumID)
-SELECT
-    t.Title,
-    t.Duration,
-    (SELECT AlbumID FROM Albums WHERE Title = t.AlbumTitle)
-FROM temp_Tracks t
-WHERE t.Title IS NOT NULL AND t.Title != '';
-
--- Cleanup
-DROP TABLE temp_Genres;
-DROP TABLE temp_Artists;
-DROP TABLE temp_Albums;
-DROP TABLE temp_Tracks;
-
-.print "Final data load complete. Database is ready."
-FINAL_LOAD
-
-echo "--- ETL Script Finished ---"
 
