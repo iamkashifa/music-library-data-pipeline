@@ -31,7 +31,7 @@ The database is designed with four main tables that are linked through foreign k
 
 ### Entity-Relationship Diagram (ERD)
 
-![ERD of the Music Database Schema](http://googleusercontent.com/file_content/1)
+![ERD of the Music Database Schema]((https://github.com/iamkashifa/music-library-data-pipeline/blob/main/ERD%20Digram%20.png))
 *A visual representation of the final database schema.*
 
 - **`Genres`**: Stores unique music genre information.
